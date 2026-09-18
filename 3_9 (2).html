@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>증산초등학교 3-9 테트리스</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2canvas for screenshot download -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Google Fonts Jua & Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Jua&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Jua', 'Inter', sans-serif;
+            background: linear-gradient(135deg, #fbcfe8 0%, #fed7aa 50%, #bae6fd 100%);
+            color: #1e293b;
+            overflow-x: hidden;
+            margin: 0;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        .cute-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            border: 4px solid #ffffff;
+            box-shadow: 0 10px 30px rgba(244, 114, 182, 0.2);
+            border-radius: 2rem;
+        }
+        canvas {
+            image-rendering: pixelated;
+        }
+        @keyframes floatPuppy {
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(3deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+        }
+        .floating-puppy {
+            animation: floatPuppy 4s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center relative">
+
+    <div class="absolute inset-0 pointer-events-none overflow-hidden z-0 hidden sm:block">
+        <div class="absolute top-5 left-5 text-3xl floating-puppy" style="animation-delay: 0s;">🐶</div>
+        <div class="absolute top-10 right-10 text-4xl floating-puppy" style="animation-delay: 1s;">🐾</div>
+        <div class="absolute bottom-5 left-10 text-4xl floating-puppy" style="animation-delay: 2s;">🐕‍🦺</div>
+        <div class="absolute bottom-10 right-10 text-3xl floating-puppy" style="animation-delay: 1.5s;">🦴</div>
+    </div>
+
+    <div class="max-w-4xl w-full flex flex-col md:flex-row items-center justify-center gap-4 cute-card p-4 relative z-10 my-auto">
+        
+        <!-- Left Side: Header & Stats -->
+        <div class="flex flex-col items-center md:items-start gap-3 w-full md:w-52">
+            <div class="text-center md:text-left w-full">
+                <span class="bg-pink-100 text-pink-600 text-xs px-2.5 py-0.5 rounded-full font-bold">증산초 3-9반 🐾</span>
+                <h1 class="text-xl font-extrabold text-pink-600 mt-1">강아지 테트리스</h1>
+            </div>
+            
+            <div class="bg-white/90 p-3 rounded-2xl border-2 border-pink-200 w-full flex flex-col gap-1.5 shadow-inner">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-slate-500 font-bold">⏱️ 남은 시간</span>
+                    <span id="timer" class="text-lg font-black text-rose-500">60초</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-slate-500 font-bold">⭐ 점수</span>
+                    <span id="score" class="text-lg font-black text-amber-500">0</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-slate-500 font-bold">🎯 맞춘 문제</span>
+                    <span id="solvedCount" class="text-lg font-black text-indigo-500">0개</span>
+                </div>
+            </div>
+
+            <!-- Next Piece Canvas -->
+            <div class="bg-white/90 p-2 rounded-2xl border-2 border-pink-200 w-full flex flex-col items-center shadow-inner">
+                <p class="text-xs text-slate-500 font-bold mb-1">🐾 다음 블록</p>
+                <canvas id="nextCanvas" width="80" height="80" class="bg-pink-50 rounded-xl border border-pink-100"></canvas>
+            </div>
+
+            <!-- Start Button -->
+            <button id="startBtn" onclick="startGame()" class="w-full py-2.5 bg-gradient-to-r from-pink-400 to-rose-400 hover:from-pink-500 hover:to-rose-500 text-white font-black text-base rounded-2xl shadow-md transition-all transform active:scale-95 border-2 border-white">게임 시작! 🚀</button>
+        </div>
+
+        <!-- Center: Main Game Board -->
+        <div class="relative flex flex-col items-center">
+            <div class="relative bg-slate-900 p-2.5 rounded-2xl border-4 border-white shadow-xl">
+                <canvas id="tetris" width="200" height="400" class="rounded-xl block w-[190px] h-[380px] sm:w-[200px] sm:h-[400px]"></canvas>
+                
+                <!-- Math Quiz Modal Overlay -->
+                <div id="quizOverlay" class="absolute inset-0 bg-pink-950/90 backdrop-blur-md flex flex-col items-center justify-center p-3 rounded-xl hidden z-30">
+                    <div class="bg-white p-4 rounded-2xl shadow-2xl w-full max-w-[240px] text-center border-4 border-pink-300">
+                        <span class="text-2xl mb-1 block">🐶 퀴즈 타임!</span>
+                        <p id="quizLevelBadge" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 inline-block mb-1">난이도 하</p>
+                        <p class="text-slate-500 text-[11px] mb-2">한 줄을 맞췄어요! 곱셈을 풀어야 진행됩니다.</p>
+                        <div id="quizQuestion" class="text-xl font-black text-pink-600 my-2 bg-pink-50 py-2 rounded-xl border border-pink-200">12 × 3 = ?</div>
+                        <input type="number" id="quizInput" class="w-full px-3 py-2 text-center text-lg font-bold bg-slate-100 border-2 border-slate-300 rounded-xl mb-2 focus:outline-none focus:border-pink-500" placeholder="정답 입력" onkeydown="if(event.key==='Enter') submitAnswer()">
+                        <button onclick="submitAnswer()" class="w-full py-2 bg-pink-500 hover:bg-pink-600 text-white font-black rounded-xl shadow-md transition-all text-sm">정답 제출! 🐾</button>
+                    </div>
+                </div>
+
+                <!-- Game Over & Result Overlay -->
+                <div id="overlay" class="absolute inset-0 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-3 rounded-xl hidden z-20 text-center overflow-y-auto">
+                    <div id="captureArea" class="w-full bg-slate-900/90 p-3 rounded-xl border border-pink-500/30 flex flex-col items-center">
+                        <span class="text-2xl mb-1">🏆</span>
+                        <h2 id="overlayTitle" class="text-base font-black text-white mb-1">60초 게임 종료!</h2>
+                        <div class="bg-white/10 px-2.5 py-1 rounded-lg mb-2 w-full text-xs">
+                            <p id="displayNickname" class="text-pink-300 font-bold hidden">닉네임: <span id="savedNicknameText" class="text-white"></span></p>
+                            <p class="text-[11px] text-pink-200">점수: <span id="finalScore" class="text-amber-300 font-bold">0</span>점 | 맞춘 문제: <span id="finalSolved" class="text-cyan-300 font-bold">0</span>개</p>
+                        </div>
+                        
+                        <!-- Nickname Input Section -->
+                        <div id="nicknameSection" class="w-full flex flex-col gap-1.5 mb-2">
+                            <input type="text" id="nicknameInput" maxlength="10" placeholder="닉네임(이름) 입력" class="w-full px-2.5 py-1.5 text-center text-xs font-bold bg-white/10 border border-white/30 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-pink-400">
+                            <button onclick="saveRecord()" class="w-full py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg transition-all text-xs">기록 저장 & 문제 보기 📋</button>
+                        </div>
+
+                        <!-- Problem History Container -->
+                        <div id="historyContainer" class="w-full max-h-24 overflow-y-auto bg-black/40 rounded-lg p-1.5 text-left text-[11px] text-slate-200 mb-2 hidden border border-white/10">
+                            <p class="font-bold text-pink-300 mb-1">푼 문제 목록:</p>
+                            <div id="historyList" class="flex flex-col gap-1"></div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons Outside Capture Area -->
+                    <div class="flex gap-1.5 w-full mt-2">
+                        <button id="downloadBtn" onclick="downloadResultImage()" class="flex-1 py-2 px-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg shadow-md transition-all text-[11px] hidden items-center justify-center gap-1">📥 이미지 저장</button>
+                        <button onclick="startGame()" class="flex-1 py-2 px-2 bg-pink-500 hover:bg-pink-400 text-white font-bold rounded-lg shadow-md transition-all text-[11px]">다시 시작 🔄</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side / Touch Controls -->
+        <div class="flex flex-col items-center justify-center gap-2 w-full md:w-44">
+            <div class="text-[11px] text-slate-500 text-center font-bold bg-white/80 p-2.5 rounded-2xl border border-pink-100 w-full hidden md:block">
+                <p class="mb-1 text-pink-600 font-black">🎮 조작 가이드</p>
+                <p class="mb-0.5">⬅️ ➡️ : 이동</p>
+                <p class="mb-0.5">⬆️ : 회전</p>
+                <p class="mb-0.5">⬇️ : 소프트 드롭</p>
+                <p>스페이스 : 하드 드롭</p>
+            </div>
+
+            <!-- Touch Control Buttons -->
+            <div class="grid grid-cols-3 gap-1.5 w-full md:hidden">
+                <div></div>
+                <button ontouchstart="rotatePiece(); event.preventDefault();" onclick="rotatePiece()" class="p-2.5 bg-white active:bg-pink-200 rounded-xl text-slate-700 font-bold flex items-center justify-center border-2 border-pink-200 shadow-sm text-sm">🔄</button>
+                <div></div>
+                <button ontouchstart="movePiece(-1, 0); event.preventDefault();" onclick="movePiece(-1, 0)" class="p-2.5 bg-white active:bg-pink-200 rounded-xl text-slate-700 font-bold flex items-center justify-center border-2 border-pink-200 shadow-sm text-sm">◀️</button>
+                <button ontouchstart="movePiece(0, 1); event.preventDefault();" onclick="movePiece(0, 1)" class="p-2.5 bg-white active:bg-pink-200 rounded-xl text-slate-700 font-bold flex items-center justify-center border-2 border-pink-200 shadow-sm text-sm">🔽</button>
+                <button ontouchstart="movePiece(1, 0); event.preventDefault();" onclick="movePiece(1, 0)" class="p-2.5 bg-white active:bg-pink-200 rounded-xl text-slate-700 font-bold flex items-center justify-center border-2 border-pink-200 shadow-sm text-sm">▶️</button>
+            </div>
+            <button ontouchstart="hardDrop(); event.preventDefault();" onclick="hardDrop()" class="w-full py-2 bg-white active:bg-pink-200 rounded-xl text-slate-700 font-bold border-2 border-pink-200 shadow-sm md:hidden text-xs">하드 드롭 🚀</button>
+        </div>
+
+    </div>
+
+    <script>
+        const canvas = document.getElementById('tetris');
+        const context = canvas.getContext('2d');
+        const nextCanvas = document.getElementById('nextCanvas');
+        const nextContext = nextCanvas.getContext('2d');
+
+        const BLOCK_SIZE = 20;
+        const ROWS = 20;
+        const COLS = 10;
+
+        context.scale(BLOCK_SIZE, BLOCK_SIZE);
+        nextContext.scale(20, 20);
+
+        const COLORS = [
+            null,
+            '#fb7185', // Rose
+            '#f472b6', // Pink
+            '#c084fc', // Purple
+            '#818cf8', // Indigo
+            '#38bdf8', // Sky
+            '#34d399', // Emerald
+            '#fbbf24'  // Amber
+        ];
+
+        const SHAPES = [
+            null,
+            [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], // I
+            [[2,0,0],[2,2,2],[0,0,0]],                 // J
+            [[0,0,3],[3,3,3],[0,0,0]],                 // L
+            [[4,4],[4,4]],                             // O
+            [[0,5,5],[5,5,0],[0,0,0]],                 // S
+            [[0,6,0],[6,6,6],[0,0,0]],                 // T
+            [[7,7,0],[0,7,7],[0,0,0]]                  // Z
+        ];
+
+        let arena = createMatrix(COLS, ROWS);
+        let score = 0;
+        let solvedCount = 0;
+        let timeLeft = 60;
+        let timerInterval = null;
+        let dropInterval = 800;
+        let dropCounter = 0;
+        let lastTime = 0;
+        let isGameOver = false;
+        let isPlaying = false;
+        let isWaitingForQuiz = false;
+
+        let currentQuiz = { num1: 0, num2: 0, answer: 0, typeName: '' };
+        let problemHistory = [];
+
+        const player = {
+            pos: {x: 0, y: 0},
+            matrix: null,
+            next: null,
+        };
+
+        function createMatrix(w, h) {
+            const matrix = [];
+            while (h--) {
+                matrix.push(new Array(w).fill(0));
+            }
+            return matrix;
+        }
+
+        function createPiece(type) {
+            return SHAPES[type];
+        }
+
+        function drawMatrix(matrix, offset, ctx = context) {
+            if (!matrix) return;
+            matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        ctx.fillStyle = COLORS[value];
+                        ctx.fillRect(x + offset.x, y + offset.y, 1, 1);
+                        
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                        ctx.fillRect(x + offset.x + 0.15, y + offset.y + 0.15, 0.7, 0.25);
+                        
+                        ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+                        ctx.lineWidth = 0.05;
+                        ctx.strokeRect(x + offset.x, y + offset.y, 1, 1);
+                    }
+                });
+            });
+        }
+
+        function drawGhostPiece() {
+            if (!isPlaying || isWaitingForQuiz || !player.matrix) return;
+
+            const ghostPos = { x: player.pos.x, y: player.pos.y };
+            while (!collideAt(arena, player.matrix, ghostPos)) {
+                ghostPos.y++;
+            }
+            ghostPos.y--;
+
+            if (ghostPos.y <= player.pos.y) return;
+
+            player.matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        context.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                        context.lineWidth = 0.08;
+                        context.setLineDash([0.15, 0.15]);
+                        context.strokeRect(x + ghostPos.x + 0.05, y + ghostPos.y + 0.05, 0.9, 0.9);
+                        context.setLineDash([]);
+                    }
+                });
+            });
+        }
+
+        function collideAt(arena, matrix, pos) {
+            for (let y = 0; y < matrix.length; ++y) {
+                for (let x = 0; x < matrix[y].length; ++x) {
+                    if (matrix[y][x] !== 0 &&
+                       (arena[y + pos.y] && arena[y + pos.y][x + pos.x]) !== 0) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function draw() {
+            context.fillStyle = '#0f172a';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawMatrix(arena, {x: 0, y: 0});
+            drawGhostPiece();
+            drawMatrix(player.matrix, player.pos);
+        }
+
+        function drawNext() {
+            nextContext.fillStyle = '#fff1f2';
+            nextContext.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+
+            if (player.next) {
+                const matrix = player.next;
+                const offset = {
+                    x: (4 - matrix[0].length) / 2,
+                    y: (4 - matrix.length) / 2
+                };
+                drawMatrix(matrix, offset, nextContext);
+            }
+        }
+
+        function merge(arena, player) {
+            player.matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        arena[y + player.pos.y][x + player.pos.x] = value;
+                    }
+                });
+            });
+        }
+
+        function rotate(matrix, dir) {
+            for (let y = 0; y < matrix.length; ++y) {
+                for (let x = 0; x < y; ++x) {
+                    [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
+                }
+            }
+            if (dir > 0) {
+                matrix.forEach(row => row.reverse());
+            } else {
+                matrix.reverse();
+            }
+        }
+
+        function playerRotate(dir) {
+            const posX = player.pos.x;
+            let offset = 1;
+            rotate(player.matrix, dir);
+            while (collide(arena, player)) {
+                player.pos.x += offset;
+                offset = -(offset + (offset > 0 ? 1 : -1));
+                if (offset > player.matrix[0].length) {
+                    rotate(player.matrix, -dir);
+                    player.pos.x = posX;
+                    return;
+                }
+            }
+        }
+
+        function collide(arena, player) {
+            return collideAt(arena, player.matrix, player.pos);
+        }
+
+        function arenaSweep() {
+            let rowCleared = false;
+            outer: for (let y = arena.length - 1; y > 0; --y) {
+                for (let x = 0; x < arena[y].length; ++x) {
+                    if (arena[y][x] === 0) {
+                        continue outer;
+                    }
+                }
+                const row = arena.splice(y, 1)[0].fill(0);
+                arena.unshift(row);
+                ++y;
+                rowCleared = true;
+                score += 150;
+            }
+
+            updateStats();
+
+            if (rowCleared) {
+                triggerQuiz();
+            }
+        }
+
+        function generateQuiz() {
+            let isAdvanced = Math.random() < 0.5;
+            let num1, num2, typeName;
+
+            if (!isAdvanced) {
+                num1 = Math.floor(Math.random() * 84) + 15;
+                num2 = Math.floor(Math.random() * 8) + 2;
+                typeName = '두 자리 × 한 자리';
+            } else {
+                num1 = Math.floor(Math.random() * 34) + 12;
+                const tensOptions = [10, 20, 30, 40, 50];
+                num2 = tensOptions[Math.floor(Math.random() * tensOptions.length)];
+                typeName = '두 자리 × 십의 자리(0)';
+            }
+
+            currentQuiz = {
+                num1: num1,
+                num2: num2,
+                answer: num1 * num2,
+                typeName: typeName,
+                isAdvanced: isAdvanced
+            };
+
+            const badge = document.getElementById('quizLevelBadge');
+            if (isAdvanced) {
+                badge.innerText = '🔥 난이도 상 (일의 자리 0 곱셈)';
+                badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 inline-block mb-1';
+            } else {
+                badge.innerText = '⭐ 난이도 하 (두 자리 × 한 자리)';
+                badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 inline-block mb-1';
+            }
+
+            document.getElementById('quizQuestion').innerText = `${num1} × ${num2} = ?`;
+            document.getElementById('quizInput').value = '';
+        }
+
+        function triggerQuiz() {
+            isPlaying = false;
+            isWaitingForQuiz = true;
+            generateQuiz();
+            document.getElementById('quizOverlay').classList.remove('hidden');
+            setTimeout(() => {
+                document.getElementById('quizInput').focus();
+            }, 100);
+        }
+
+        function submitAnswer() {
+            if (!isWaitingForQuiz) return;
+            const userInput = parseInt(document.getElementById('quizInput').value);
+
+            if (userInput === currentQuiz.answer) {
+                solvedCount++;
+                score += 300;
+                problemHistory.push({
+                    q: `${currentQuiz.num1} × ${currentQuiz.num2}`,
+                    answer: currentQuiz.answer,
+                    user: userInput,
+                    correct: true,
+                    type: currentQuiz.typeName
+                });
+                document.getElementById('quizOverlay').classList.add('hidden');
+                isWaitingForQuiz = false;
+                isPlaying = true;
+                lastTime = performance.now();
+                updateStats();
+                loop();
+            } else {
+                const inputEl = document.getElementById('quizInput');
+                inputEl.classList.add('border-red-500');
+                setTimeout(() => inputEl.classList.remove('border-red-500'), 1000);
+                inputEl.value = '';
+                inputEl.focus();
+            }
+        }
+
+        function playerDrop() {
+            player.pos.y++;
+            if (collide(arena, player)) {
+                player.pos.y--;
+                merge(arena, player);
+                playerReset();
+                arenaSweep();
+            }
+            dropCounter = 0;
+        }
+
+        function movePiece(dirX, dirY) {
+            if (!isPlaying || isWaitingForQuiz) return;
+            if (dirY > 0) {
+                playerDrop();
+            } else {
+                player.pos.x += dirX;
+                if (collide(arena, player)) {
+                    player.pos.x -= dirX;
+                }
+            }
+            draw();
+        }
+
+        function rotatePiece() {
+            if (!isPlaying || isWaitingForQuiz) return;
+            playerRotate(1);
+            draw();
+        }
+
+        function hardDrop() {
+            if (!isPlaying || isWaitingForQuiz) return;
+            while (!collide(arena, player)) {
+                player.pos.y++;
+            }
+            player.pos.y--;
+            merge(arena, player);
+            playerReset();
+            arenaSweep();
+            dropCounter = 0;
+            draw();
+        }
+
+        function playerReset() {
+            if (player.next === null) {
+                player.next = createPiece(Math.floor(Math.random() * 7) + 1);
+            }
+            player.matrix = player.next;
+            player.next = createPiece(Math.floor(Math.random() * 7) + 1);
+            player.pos.y = 0;
+            player.pos.x = Math.floor((arena[0].length - player.matrix[0].length) / 2);
+            
+            if (collide(arena, player)) {
+                endGame();
+            }
+            drawNext();
+        }
+
+        function updateStats() {
+            document.getElementById('score').innerText = score;
+            document.getElementById('solvedCount').innerText = solvedCount + '개';
+        }
+
+        function startGame() {
+            arena.forEach(row => row.fill(0));
+            score = 0;
+            solvedCount = 0;
+            timeLeft = 60;
+            isGameOver = false;
+            isPlaying = true;
+            isWaitingForQuiz = false;
+            problemHistory = [];
+            updateStats();
+
+            document.getElementById('overlay').classList.add('hidden');
+            document.getElementById('quizOverlay').classList.add('hidden');
+            document.getElementById('historyContainer').classList.add('hidden');
+            document.getElementById('nicknameSection').classList.remove('hidden');
+            document.getElementById('displayNickname').classList.add('hidden');
+            document.getElementById('downloadBtn').classList.add('hidden');
+            document.getElementById('startBtn').innerText = '게임 중... 🐾';
+
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (isPlaying && !isWaitingForQuiz) {
+                    timeLeft--;
+                    document.getElementById('timer').innerText = timeLeft + '초';
+                    if (timeLeft <= 0) {
+                        endGame();
+                    }
+                }
+            }, 1000);
+
+            player.next = createPiece(Math.floor(Math.random() * 7) + 1);
+            playerReset();
+            lastTime = performance.now();
+            loop();
+        }
+
+        function endGame() {
+            isPlaying = false;
+            isGameOver = true;
+            clearInterval(timerInterval);
+            document.getElementById('finalScore').innerText = score;
+            document.getElementById('finalSolved').innerText = solvedCount;
+            document.getElementById('overlayTitle').innerText = '60초 게임 종료!';
+            document.getElementById('overlay').classList.remove('hidden');
+            document.getElementById('startBtn').innerText = '게임 시작! 🚀';
+        }
+
+        function saveRecord() {
+            const nickname = document.getElementById('nicknameInput').value.trim() || '증산초 친구';
+            document.getElementById('nicknameSection').classList.add('hidden');
+            
+            document.getElementById('savedNicknameText').innerText = nickname;
+            document.getElementById('displayNickname').classList.remove('hidden');
+            document.getElementById('downloadBtn').classList.remove('flex');
+            document.getElementById('downloadBtn').classList.add('flex');
+
+            const historyList = document.getElementById('historyList');
+            historyList.innerHTML = '';
+
+            if (problemHistory.length === 0) {
+                historyList.innerHTML = '<p class="text-slate-400">푼 문제가 없습니다.</p>';
+            } else {
+                problemHistory.forEach((item, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between items-center bg-white/10 px-2 py-1 rounded';
+                    div.innerHTML = `<span>${index + 1}. ${item.q} = <b>${item.user}</b> <span class="text-[9px] text-pink-300">(${item.type})</span></span> <span class="text-emerald-400 font-bold">정답</span>`;
+                    historyList.appendChild(div);
+                });
+            }
+
+            document.getElementById('historyContainer').classList.remove('hidden');
+        }
+
+        function downloadResultImage() {
+            const captureArea = document.getElementById('captureArea');
+            html2canvas(captureArea, {
+                backgroundColor: '#0f172a',
+                scale: 2
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = '증산초_3-9_테트리스_결과.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        }
+
+        function loop(time = 0) {
+            if (!isPlaying || isWaitingForQuiz) return;
+
+            const deltaTime = time - lastTime;
+            lastTime = time;
+            dropCounter += deltaTime;
+
+            if (dropCounter > dropInterval) {
+                playerDrop();
+            }
+
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        document.addEventListener('keydown', event => {
+            if (!isPlaying || isWaitingForQuiz) return;
+
+            if (event.key === 'ArrowLeft') {
+                player.pos.x--;
+                if (collide(arena, player)) {
+                    player.pos.x++;
+                }
+            } else if (event.key === 'ArrowRight') {
+                player.pos.x++;
+                if (collide(arena, player)) {
+                    player.pos.x--;
+                }
+            } else if (event.key === 'ArrowDown') {
+                playerDrop();
+            } else if (event.key === 'ArrowUp') {
+                playerRotate(1);
+            } else if (event.key === ' ') {
+                hardDrop();
+                event.preventDefault();
+            }
+            draw();
+        });
+
+        draw();
+    </script>
+</body>
+</html>
